@@ -1,0 +1,50 @@
+name: Create and publish a RFDiffusion-AA Docker image
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-push-image:
+    runs-on: ubuntu-24-x4-16gb-300gb-ssd
+    # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in
+    # this job.
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: configure aws credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::390844779993:role/gh-actions-role
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          aws-region: eu-west-1
+      # Hello from AWS: WhoAmI
+      - name: Sts GetCallerIdentity
+        run: |
+           aws sts get-caller-identity
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+      # This step uses [docker/metadata-action](https://github.com/docker/metadata-action#about)
+      # to extract tags and labels that will be applied to the specified image.
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
+        with:
+          images: ${{ steps.ecr-login.outputs.REGISTRY }}/rfdiffusion-aa
+      - name: Build and push Docker image
+        id: push
+        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
